@@ -78,7 +78,7 @@ def exgee(x_train, y_train, x_test, y_test):
     }
 
     classifier = XGBClassifier()
-    random_search = RandomizedSearchCV(xgb, param_distributions = params, n_iter = 5, 
+    random_search = RandomizedSearchCV(estimator = XGBClassifier(), param_distributions = params, n_iter = 5, 
                                        scoring = 'roc_auc', n_jobs = -1, cv = 5, verbose = 3)
     
     random_search.fit(x_train, y_train)
@@ -96,7 +96,7 @@ def exgee(x_train, y_train, x_test, y_test):
     score.mean()
     classifier.fit(x_train, y_train)
 
-    pred = classifier.predct(x_test)
+    pred = classifier.predict(x_test)
 
     accuracy = accuracy_score(y_test, pred)
     print("Accuracy: %.2f%%" % (accuracy * 100.0))
@@ -140,7 +140,7 @@ def ran_forest(x_train, y_train, x_test, y_test):
 
 
 # Main method
-if __name__ == 'main':
+if __name__ == "__main__":
     ds = pd.read_csv("/kaggle/input/heart-disease-dataset/heart.csv")
     dataset_eval(ds)
 
@@ -148,7 +148,7 @@ if __name__ == 'main':
 
     tmp_ds = pd.get_dummies(ds, columns = features)
     std_scl = StandardScaler()
-    tmp_ds[['age', 'trestbps', 'chol', ' thalach', 'oldpeak']] = std_scl.fit_transform([['age', 'trestbps', 'chol', ' thalach', 'oldpeak']])
+    tmp_ds[['age', 'trestbps', 'chol', 'thalach', 'oldpeak']] = std_scl.fit_transform([['age', 'trestbps', 'chol', ' thalach', 'oldpeak']])
 
     x = tmp_ds.drop(["target"], axis = 1)
     y = tmp_ds.target
