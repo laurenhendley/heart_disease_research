@@ -136,7 +136,41 @@ def ran_forest(x_train, y_train, x_test, y_test):
 
     y_pred = rf.predict(x_test)
     accuracy_score(y_test, y_pred)
+    print("Accuracy: %.2f%%" % (accuracy * 100.0))
 
+
+## Logistic Regression implementation
+def log_reg(x_train,y_train,x_test,y_test):
+    print("Starting Logistic Regression...")
+
+    model = LogisticRegression(max_iter=1000)
+    model.fit(x_train,y_train)
+
+    pred = model.predict(x_test)
+
+    accuracy = accuracy_score(y_test,pred)
+    print("Accuracy: %.2f%%" % (accuracy*100.0))
+
+
+## Regularized Logistic Regression implementation (L1, L2, ElasticNet)
+def l1l2(x_train,y_train,x_test,y_test):
+    print("Starting Regularized Logistic Regression...")
+
+    #L2 Ridge, L1 Lasso, and ElasticNet configurations
+    configs = [
+        ("L2 Ridge", {"penalty": "l2", "solver": "lbfgs",     "max_iter": 1000, "C": 1.0}),
+        ("L1 Lasso", {"penalty": "l1", "solver": "liblinear", "max_iter": 1000, "C": 1.0}),
+        ("ElasticNet", {"penalty": "elasticnet", "solver": "saga", "max_iter": 1000, "C": 1.0, "l1_ratio": 0.5}),
+    ]
+
+    for name, kwargs in configs:
+        model = LogisticRegression(**kwargs)
+        model.fit(x_train,y_train)
+
+        pred = model.predict(x_test)
+
+        accuracy = accuracy_score(y_test,pred)
+        print("%s Accuracy: %.2f%%" % (name, accuracy*100))
 
 
 # Main method
@@ -148,7 +182,7 @@ if __name__ == "__main__":
 
     tmp_ds = pd.get_dummies(ds, columns = features)
     std_scl = StandardScaler()
-    tmp_ds[['age', 'trestbps', 'chol', 'thalach', 'oldpeak']] = std_scl.fit_transform([['age', 'trestbps', 'chol', ' thalach', 'oldpeak']])
+    tmp_ds[['age', 'trestbps', 'chol', 'thalach', 'oldpeak']] = std_scl.fit_transform(tmp_ds[['age', 'trestbps', 'chol', 'thalach', 'oldpeak']])
 
     x = tmp_ds.drop(["target"], axis = 1)
     y = tmp_ds.target
@@ -158,3 +192,7 @@ if __name__ == "__main__":
     exgee(x_train, y_train, x_test, y_test)
 
     ran_forest(x_train, y_train, x_test, y_test)
+
+    log_reg(x_train, y_train, x_test, y_test)
+
+    l1l2(x_train, y_train, x_test, y_test)
