@@ -37,6 +37,9 @@ Methods required:
 '''
 
 
+### PREREQS
+## pip install ucimlrepo
+
 
 # IMPORTS
 import pandas as pd
@@ -44,12 +47,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import xgboost as xgb
 
-from sklearn.metrics import accuracy_score, recall_score
-from sklearn.model_selection import train_test_split, RandomizedSearchCV, GridSearchCV, cross_val_score
+from sklearn.metrics import accuracy_score, recall_score, roc_auc_score, f1_score, classification_report
+from sklearn.model_selection import train_test_split, RandomizedSearchCV, GridSearchCV, cross_val_score, StratifiedKFold, cross_val_score
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
 from sklearn.preprocessing import StandardScaler
+
+from imblearn.over_sampling import SMOTE
+
+from ucimlrepo import fetch_ucirepo 
+
 
 from xgboost import XGBClassifier
 
@@ -69,33 +77,37 @@ def dataset_eval(ds):
 def exgee(x_train, y_train, x_test, y_test):
     print("Starting XGBoost...")
 
+    smote = SMOTE(random_state=42)
+    x_train_bal, y_train_bal = smote.fit_resample(x_train, y_train) 
+
+    print("Balanced class distribution:", pd.Series(y_train_bal).value_counts())
+
     params = {
         "learning_rate" : [0.05, 0.1, 0.15, 0.2, 0.25, 0.3],
-        "max_depth" : [3, 4, 5, 6, 8, 10, 12, 15],
+        "max_depth" : [2, 3, 4, 5, 6],
         "min_child_weight" : [1, 3, 5, 7],
         "gamma" : [0.0, 0.1, 0.2, 0.3, 0.4],
         "colsample_bytree" : [0.3, 0.4, 0.5, 0.7]
     }
 
-    classifier = XGBClassifier()
-    random_search = RandomizedSearchCV(estimator = XGBClassifier(), param_distributions = params, n_iter = 5, 
-                                       scoring = 'roc_auc', n_jobs = -1, cv = 5, verbose = 3)
+    random_search = RandomizedSearchCV(estimator = XGBClassifier(), param_distributions = params, n_iter = 5, scoring = 'f1', n_jobs = -1, cv = 5, verbose = 3)
     
-    random_search.fit(x_train, y_train)
+    random_search.fit(x_train_bal, y_train_bal)
 
-    classifier = xgb.XGBClassifier(base_score=0.5, booster='gbtree', colsample_bylevel=1,
-              colsample_bynode=1, colsample_bytree=0.3, gamma=0.2,
-              importance_type='gain', interaction_constraints='',
-              learning_rate=0.1, max_delta_step=0, max_depth=6,
-              min_child_weight=1, monotone_constraints='()',
-              n_estimators=100, n_jobs=0, num_parallel_tree=1, random_state=0,
-              reg_alpha=0, reg_lambda=1, scale_pos_weight=1, subsample=1,
-              tree_method='exact', validate_parameters=1, verbosity=None)
+    print("Best params:", random_search.best_params_)
 
+    classifier = random_search.best_estimator_
+
+    pred = classifier.predict(x_test)
+    print("Predicted class distribution:", pd.Series(pred).value_counts())
+    
     return classifier
 
 
 def ran_forest(x_train, y_train, x_test, y_test):
+    smote = SMOTE(random_state=42)
+    x_train_bal, y_train_bal = smote.fit_resample(x_train, y_train) 
+
     # Number of trees in random forest
     n_estimators=[20,60,100,120]
 
@@ -103,7 +115,7 @@ def ran_forest(x_train, y_train, x_test, y_test):
     max_features=[0.2,0.6,1.0]
 
     # Maximum number of levels in tree
-    max_depth=[2,4,8,None]
+    max_depth=[2,4,6]
 
     #Number of samples
     max_samples=[0.5,0.75,1.0]
@@ -119,7 +131,7 @@ def ran_forest(x_train, y_train, x_test, y_test):
     rf_grid = GridSearchCV(estimator = rf, param_grid = param_grid,
                            cv = 5, verbose = 2, n_jobs = -1)
     
-    rf_grid.fit(x_train, y_train)
+    rf_grid.fit(x_train_bal, y_train_bal)
     
     best_rf = rf_grid.best_estimator_
 
@@ -132,6 +144,8 @@ def ran_forest(x_train, y_train, x_test, y_test):
     y_pred = rf_grid.best_estimator_.predict(x_test)
     accuracy = accuracy_score(y_test, y_pred)
     print("Accuracy: %.2f%%" % (accuracy * 100.0))
+    print(classification_report(y_test, y_pred))
+    print("AUC: %.3f" % roc_auc_score(y_test, y_pred))
 
 
 ## Logistic Regression implementation
@@ -145,6 +159,8 @@ def log_reg(x_train,y_train,x_test,y_test):
 
     accuracy = accuracy_score(y_test,pred)
     print("Accuracy: %.2f%%" % (accuracy*100.0))
+    print(classification_report(y_test, pred))
+    print("AUC: %.3f" % roc_auc_score(y_test, pred))
 
 
 ## Regularized Logistic Regression implementation (L1, L2, ElasticNet)
@@ -166,12 +182,31 @@ def l1l2(x_train,y_train,x_test,y_test):
 
         accuracy = accuracy_score(y_test,pred)
         print("%s Accuracy: %.2f%%" % (name, accuracy*100))
+        print(classification_report(y_test, pred))
+        print("AUC: %.3f" % roc_auc_score(y_test, pred))
+        
+
+def ds_clean():
+    heart_disease = fetch_ucirepo(id=45)
+    ds = pd.concat([heart_disease.data.features, heart_disease.data.targets], axis=1)
+    
+    # binarize target 
+    ds['num'] = (ds['num'] > 0).astype(int)
+    ds = ds.rename(columns={'num': 'target'})
+
+    ds = ds.dropna()
+
+    print("Class balance:\n", ds['target'].value_counts())
+    print("Class ratio:", ds['target'].value_counts(normalize=True).round(3).to_dict())
+
+    dataset_eval(ds)
+
+    return ds
 
 
 # Main method
 if __name__ == "__main__":
-    ds = pd.read_csv("/kaggle/input/heart-disease-dataset/heart.csv")
-    dataset_eval(ds)
+    ds = ds_clean()
 
     features = [feature for feature in ds.columns if len(ds[feature].unique()) < 10 and feature != "target"]
 
@@ -183,17 +218,17 @@ if __name__ == "__main__":
     y = tmp_ds.target
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size = 0.2, random_state = 42)
+    smote = SMOTE(random_state=42)
+    x_train_bal, y_train_bal = smote.fit_resample(x_train, y_train)
 
     classifier = exgee(x_train, y_train, x_test, y_test)
 
-    score = cross_val_score(classifier, x, y, cv = 10)
-    score.mean()
-    classifier.fit(x_train, y_train)
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    score = cross_val_score(classifier, x, y, cv=skf, scoring='roc_auc')
+    print(f"AUC: {score.mean():.3f} (+/- {score.std():.3f})")
 
     pred = classifier.predict(x_test)
 
-    train_pred = classifier.predict(x_train)
-    print("Train accuracy: %.2f%%" % (accuracy_score(y_train, train_pred) * 100.0))
     print("Test accuracy:  %.2f%%" % (accuracy_score(y_test, pred) * 100.0))
 
 
@@ -202,6 +237,6 @@ if __name__ == "__main__":
 
     ran_forest(x_train, y_train, x_test, y_test)
 
-    log_reg(x_train, y_train, x_test, y_test)
+    log_reg(x_train_bal, y_train_bal, x_test, y_test)
 
-    l1l2(x_train, y_train, x_test, y_test)
+    l1l2(x_train_bal, y_train_bal, x_test, y_test)
